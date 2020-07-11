@@ -14,10 +14,12 @@ from torch.nn.utils import spectral_norm
 from apex import amp
 from torchvision.utils import save_image
 from shutil import rmtree
+from datetime import datetime
+import math
 
 # Set random seem for reproducibility
 manualSeed = 999
-#manualSeed = random.randint(1, 10000) # use if you want new results
+# manualSeed = random.randint(1, 10000) # use if you want new results
 print("Random Seed: ", manualSeed)
 random.seed(manualSeed)
 torch.manual_seed(manualSeed)
@@ -63,8 +65,6 @@ ema_decay = 0.9999
 # Number of GPUs available. Use 0 for CPU mode.
 ngpu = torch.cuda.device_count()
 
-#%%
-
 # load checkpoint data if it exists
 have_checkpoint = False
 checkpoint = None
@@ -73,8 +73,6 @@ if os.path.exists(checkpoint_file_path):
     checkpoint = torch.load(checkpoint_file_path)
     have_checkpoint = True
     completed_epochs = checkpoint['completed_epochs']
-
-#%%
 
 # calculate frechet inception distance
 num_batches = 200
@@ -91,20 +89,19 @@ def print_frechet_inception_distance():
 
     real_images = torch.cat([x[0] for _, x in zip(range(num_batches), iter(dataloader))])
 
-    for i in range(real_images.size(0)):
-        save_image(real_images[i, :, :, :], real_images_for_fid_dir + '{}.png'.format(i))
+    for k in range(real_images.size(0)):
+        save_image(real_images[k, :, :, :], real_images_for_fid_dir + '{}.png'.format(k))
 
     with torch.no_grad():
         for batch_num in range(num_batches):
             generator_inputs = torch.randn(batch_size, nz, 1, 1).to(device)
             fake_images = netG(generator_inputs).detach().cpu()
-            for i in range(fake_images.size(0)):
-                save_image(fake_images[i, :, :, :], fake_images_for_fid_dir + '{}.png'.format(i + batch_num * batch_size))
+            for k in range(fake_images.size(0)):
+                save_image(fake_images[k, :, :, :],
+                           fake_images_for_fid_dir + '{}.png'.format(k + batch_num * batch_size))
 
-    # TODO: fix me
-    # ! pytorch-fid/fid_score.py --batch-size 128 --gpu 0 ./fid_images/real/ ./fid_images/fake/
+    os.system('pytorch-fid/fid_score.py --batch-size 128 --gpu 0 ./fid_images/real/ ./fid_images/fake/')
 
-#%%
 
 # We can use an image folder dataset the way we have it setup.
 # Create the dataset
@@ -124,12 +121,11 @@ device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0) else 
 
 # Plot some training images
 real_batch = next(iter(dataloader))
-plt.figure(figsize=(8,8))
+plt.figure(figsize=(8, 8))
 plt.axis("off")
 plt.title("Training Images")
-plt.imshow(np.transpose(vutils.make_grid(real_batch[0].to(device)[:64], padding=2, normalize=True).cpu(),(1,2,0)))
+plt.imshow(np.transpose(vutils.make_grid(real_batch[0].to(device)[:64], padding=2, normalize=True).cpu(), (1, 2, 0)))
 
-#%%
 
 # custom weights initialization called on netG and netD
 def weights_init(m):
@@ -140,22 +136,23 @@ def weights_init(m):
         nn.init.normal_(m.weight.data, 1.0, 0.02)
         nn.init.constant_(m.bias.data, 0)
 
-#%%
 
-class Self_Attn(nn.Module):
+class SelfAttn(nn.Module):
     """ Self attention Layer"""
-    def __init__(self,in_dim,activation):
-        super(Self_Attn,self).__init__()
+
+    def __init__(self, in_dim, activation):
+        super(SelfAttn, self).__init__()
         self.chanel_in = in_dim
         self.activation = activation
 
-        self.query_conv = spectral_norm(nn.Conv2d(in_channels = in_dim , out_channels = in_dim//8 , kernel_size= 1))
-        self.key_conv = spectral_norm(nn.Conv2d(in_channels = in_dim , out_channels = in_dim//8 , kernel_size= 1))
-        self.value_conv = spectral_norm(nn.Conv2d(in_channels = in_dim , out_channels = in_dim , kernel_size= 1))
+        self.query_conv = spectral_norm(nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1))
+        self.key_conv = spectral_norm(nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1))
+        self.value_conv = spectral_norm(nn.Conv2d(in_channels=in_dim, out_channels=in_dim, kernel_size=1))
         self.gamma = nn.Parameter(torch.zeros(1))
 
-        self.softmax  = nn.Softmax(dim=-1) #
-    def forward(self,x):
+        self.softmax = nn.Softmax(dim=-1)  #
+
+    def forward(self, x):
         """
             inputs :
                 x : input feature maps( B X C X W X H)
@@ -163,20 +160,19 @@ class Self_Attn(nn.Module):
                 out : self attention value + input feature
                 attention: B X N X N (N is Width*Height)
         """
-        m_batchsize,C,width ,height = x.size()
-        proj_query  = self.query_conv(x).view(m_batchsize,-1,width*height).permute(0,2,1) # B X CX(N)
-        proj_key =  self.key_conv(x).view(m_batchsize,-1,width*height) # B X C x (*W*H)
-        energy =  torch.bmm(proj_query,proj_key) # transpose check
-        attention = self.softmax(energy) # BX (N) X (N)
-        proj_value = self.value_conv(x).view(m_batchsize,-1,width*height) # B X C X N
+        m_batch_size, c, width, height = x.size()
+        proj_query = self.query_conv(x).view(m_batch_size, -1, width * height).permute(0, 2, 1)  # B X CX(N)
+        proj_key = self.key_conv(x).view(m_batch_size, -1, width * height)  # B X C x (*W*H)
+        energy = torch.bmm(proj_query, proj_key)  # transpose check
+        attention = self.softmax(energy)  # BX (N) X (N)
+        proj_value = self.value_conv(x).view(m_batch_size, -1, width * height)  # B X C X N
 
-        out = torch.bmm(proj_value,attention.permute(0,2,1) )
-        out = out.view(m_batchsize,C,width,height)
+        out = torch.bmm(proj_value, attention.permute(0, 2, 1))
+        out = out.view(m_batch_size, c, width, height)
 
-        out = self.gamma*out + x
+        out = self.gamma * out + x
         return out
 
-#%%
 
 # Generator Code
 class ResBlockUp(nn.Module):
@@ -195,7 +191,6 @@ class ResBlockUp(nn.Module):
 
         self.out_bn = nn.BatchNorm2d(self.out_channels)
         self.out_relu = nn.ReLU(True)
-
 
     def forward(self, input):
         main = input
@@ -217,9 +212,8 @@ class ResBlockUp(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, ngpu):
+    def __init__(self):
         super(Generator, self).__init__()
-        self.ngpu = ngpu
 
         self.main = nn.Sequential(
             spectral_norm(nn.ConvTranspose2d(nz, ngf * 16, 4, 1, 0, bias=False)),
@@ -228,23 +222,21 @@ class Generator(nn.Module):
             ResBlockUp(ngf * 16, ngf * 8),
             ResBlockUp(ngf * 8, ngf * 4),
             ResBlockUp(ngf * 4, ngf * 2),
-            Self_Attn(ngf * 2, 'relu'),
+            SelfAttn(ngf * 2, 'relu'),
             ResBlockUp(ngf * 2, ngf),
-            spectral_norm(nn.Conv2d( ngf, nc, 3, 1, 1, bias=False)),
+            spectral_norm(nn.Conv2d(ngf, nc, 3, 1, 1, bias=False)),
             nn.Tanh()
         )
-
 
     def forward(self, input):
         return self.main(input)
 
-#%%
 
 # Create the generator
-netG = Generator(ngpu).to(device)
+netG = Generator().to(device)
 
 # # Create EMA generator
-# netG_ema = Generator(ngpu).to(device)
+# netG_ema = Generator().to(device)
 
 # Handle multi-gpu if desired
 if (device.type == 'cuda') and (ngpu > 1):
@@ -261,7 +253,6 @@ else:
 # Print the model
 print(netG)
 
-#%%
 
 class ResBlockDown(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -277,7 +268,6 @@ class ResBlockDown(nn.Module):
         self.main_conv2 = spectral_norm(nn.Conv2d(self.out_channels, self.out_channels, 3, 1, 1))
 
         self.out_relu = nn.ReLU(True)
-
 
     def forward(self, input):
         main = input
@@ -295,14 +285,14 @@ class ResBlockDown(nn.Module):
         out = self.out_relu(out)
         return out
 
+
 class Discriminator(nn.Module):
-    def __init__(self, ngpu):
+    def __init__(self):
         super(Discriminator, self).__init__()
-        self.ngpu = ngpu
         self.main = nn.Sequential(
             # input is (nc) x 64 x 64
             ResBlockDown(nc, ndf),
-            Self_Attn(ndf, 'relu'),
+            SelfAttn(ndf, 'relu'),
             # state size. (ndf) x 32 x 32
             ResBlockDown(ndf, ndf * 2),
             # state size. (ndf*2) x 16 x 16
@@ -316,10 +306,9 @@ class Discriminator(nn.Module):
     def forward(self, input):
         return self.main(input)
 
-#%%
 
 # Create the Discriminator
-netD = Discriminator(ngpu).to(device)
+netD = Discriminator().to(device)
 
 # Handle multi-gpu if desired
 if (device.type == 'cuda') and (ngpu > 1):
@@ -334,8 +323,6 @@ else:
 
 # Print the model
 print(netD)
-
-#%%
 
 # Setup Adam optimizers for both G and D
 optimizerD = optim.Adam(netD.parameters(), lr=lr_d, betas=betas)
@@ -357,11 +344,7 @@ if have_checkpoint:
     optimizerG.load_state_dict(checkpoint['optimizerG_state_dict'])
     amp.load_state_dict(checkpoint['amp'])
 
-#%%
-
 # Training Loop
-from datetime import datetime
-import math
 
 # Lists to keep track of progress
 G_losses = []
@@ -383,7 +366,7 @@ for epoch in range(num_epochs):
             ############################
             # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
             ###########################
-            ## Train with all-real batch
+            # Train with all-real batch
             # Format batch
             real_cpu = data[0].to(device)
             # Forward pass real batch through D
@@ -392,7 +375,7 @@ for epoch in range(num_epochs):
             errD_real = torch.nn.ReLU()(1.0 - output).mean()
             D_x = errD_real.item()
 
-            ## Train with all-fake batch
+            # Train with all-fake batch
             # Generate batch of latent vectors
             noise = torch.randn(batch_size, nz, 1, 1).to(device)
             # Generate fake image batch with G
@@ -463,21 +446,16 @@ for epoch in range(num_epochs):
     if completed_epochs % 5 == 0:
         print_frechet_inception_distance()
 
-
 # plot of D & G’s losses versus training iterations.
 
-#%%
-
-plt.figure(figsize=(10,5))
+plt.figure(figsize=(10, 5))
 plt.title("Generator and Discriminator Loss During Training")
-plt.plot(G_losses,label="G")
-plt.plot(D_losses,label="D")
+plt.plot(G_losses, label="G")
+plt.plot(D_losses, label="D")
 plt.xlabel("iterations")
 plt.ylabel("Loss")
 plt.legend()
 plt.show()
-
-#%%
 
 # plot real images and fake images side by side
 
@@ -485,11 +463,11 @@ plt.show()
 real_batch = next(iter(dataloader))
 
 # Plot the real images
-plt.figure(figsize=(15,15))
-plt.subplot(1,2,1)
+plt.figure(figsize=(15, 15))
+plt.subplot(1, 2, 1)
 plt.axis("off")
 plt.title("Real Images")
-plt.imshow(np.transpose(vutils.make_grid(real_batch[0].to(device)[:64], padding=5, normalize=True).cpu(),(1,2,0)))
+plt.imshow(np.transpose(vutils.make_grid(real_batch[0].to(device)[:64], padding=5, normalize=True).cpu(), (1, 2, 0)))
 
 # Plot the fake images from the last epoch
 with torch.no_grad():
@@ -497,8 +475,8 @@ with torch.no_grad():
 
 fakes = vutils.make_grid(fake, padding=2, normalize=True)
 
-plt.subplot(1,2,2)
+plt.subplot(1, 2, 2)
 plt.axis("off")
 plt.title("Fake Images")
-plt.imshow(np.transpose(fakes,(1,2,0)))
+plt.imshow(np.transpose(fakes, (1, 2, 0)))
 plt.show()
