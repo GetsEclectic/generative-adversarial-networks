@@ -1,0 +1,3 @@
+[submodule "stylegan2-pytorch"]
+	path = stylegan2-pytorch
+	url = https://github.com/GetsEclectic/stylegan2-pytorch.git
