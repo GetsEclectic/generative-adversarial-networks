@@ -12,13 +12,14 @@ if [ ! -d "apex" ]; then
     unzip -q img_align_celeba.zip -d /workspace/imgs
 
     # install apex
-    git clone https://github.com/NVIDIA/apex.git
-    pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./apex
+#    git clone https://github.com/NVIDIA/apex.git
+#    pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./apex
 
     # get FID calculation library
     git clone https://github.com/mseitzer/pytorch-fid.git
 
     # get some more python libraries
     pip install matplotlib scipy
-    pip install .
+    pip install stylegan2-pytorch
+    chmod u+x stylegan2-pytorch/bin/stylegan2-pytorch
 fi
