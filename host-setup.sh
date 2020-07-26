@@ -2,7 +2,7 @@
 
 PATH='/opt/conda/bin:/opt/conda/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
 
-if [ ! -d "apex" ]; then
+if [ ! -d "/workspace/imgs" ]; then
     # get celeba data
     DEBIAN_FRONTEND=noninteractive apt-get -yq update
     DEBIAN_FRONTEND=noninteractive apt-get -yq install wget unzip git rsync
@@ -20,6 +20,7 @@ if [ ! -d "apex" ]; then
 
     # get some more python libraries
     pip install matplotlib scipy
-    pip install stylegan2-pytorch
-    chmod u+x stylegan2-pytorch/bin/stylegan2-pytorch
 fi
+
+pip install /workspace/stylegan2-pytorch
+chmod u+x /workspace/stylegan2-pytorch/bin/stylegan2_pytorch
