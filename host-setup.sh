@@ -12,8 +12,8 @@ if [ ! -d "/workspace/imgs" ]; then
     unzip -q img_align_celeba.zip -d /workspace/imgs
 
     # install apex
-#    git clone https://github.com/NVIDIA/apex.git
-#    pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./apex
+    git clone https://github.com/NVIDIA/apex.git
+    pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./apex
 
     # get FID calculation library
     git clone https://github.com/mseitzer/pytorch-fid.git
