@@ -5,7 +5,7 @@ PATH='/opt/conda/bin:/opt/conda/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:/u
 if [ ! -d "/workspace/imgs" ]; then
     # get celeba data
     DEBIAN_FRONTEND=noninteractive apt-get -yq update
-    DEBIAN_FRONTEND=noninteractive apt-get -yq install wget unzip git rsync
+    DEBIAN_FRONTEND=noninteractive apt-get -yq install wget unzip git
 
     echo "getting data"
     wget --quiet --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate 'https://docs.google.com/uc?export=download&id=1g9tAydWEN0PW-BYxdhNuGG9vXrdNzffA' -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=1g9tAydWEN0PW-BYxdhNuGG9vXrdNzffA" -O img_align_celeba.zip && rm -rf /tmp/cookies.txt
