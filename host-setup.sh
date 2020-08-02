@@ -17,6 +17,9 @@ if [ ! -d "imgs" ]; then
 
     # get FID calculation library
     git clone https://github.com/mseitzer/pytorch-fid.git
+    mv pytorch-fid stylegan2-pytorch/stylegan2_pytorch/pytorch_fid
+    touch stylegan2-pytorch/stylegan2_pytorch/pytorch_fid/__init__.py
+    sed -i 's/from inception/from .inception/' stylegan2-pytorch/stylegan2_pytorch/pytorch_fid/fid_score.py
 
     # get some more python libraries
     pip install matplotlib scipy
